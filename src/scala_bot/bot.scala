@@ -111,7 +111,7 @@ object main extends IOApp:
 				wsQueue  <- Queue.unbounded[IO, String]
 				consoleQ <- Queue.unbounded[IO, ConsoleCmd]
 				gameRef  <- Ref.of[IO, Option[Game]](None)
-				client   = new BotClient(wsQueue, gameRef, BotConfig.fromEnv(env))(using runtime)
+				client   = new BotClient(wsQueue, gameRef, BotConfig.fromEnv(env), username)(using runtime)
 				console  <- spawnConsole(consoleQ, client, username)
 				_        <- IO { Variant.init() }
 				_        <- (console.join, receive(client), senderLoop(wsQueue), heartbeat).parTupled
