@@ -10,6 +10,7 @@ import scala_bot.basics._
 import scala_bot.console.{ConsoleCmd, NavArg}
 import scala_bot.reactor.Reactor
 import scala_bot.logger._
+import scala_bot.logfile._
 import scala_bot.refSieve.RefSieve
 import scala_bot.hgroup.{HGroup, Level}
 
@@ -24,13 +25,14 @@ case class ChatList(list: Vector[ChatMessage]) derives ReadWriter
 
 case class GameActionMessage(
 	tableID: Int,
-	action: Action
+	action: Action,
+	databaseID: Option[Int] = None
 )
 
 object GameActionMessage:
 	def fromJSON(json: ujson.Value): Option[GameActionMessage] =
-		Action.fromJSON(json.obj("action")).map:
-			GameActionMessage(json.obj("tableID").num.toInt, _)
+		Action.fromJSON(json.obj("action")).map: action =>
+			GameActionMessage(json.obj("tableID").num.toInt, action, Some(json.obj("databaseID").num.toInt))
 
 case class Spectator(
 	name: String,
@@ -67,6 +69,7 @@ case class TableOptions(
 
 case class InitMessage(
 	tableID: Int,
+	databaseID: Int,
 	playerNames: Vector[String],
 	ourPlayerIndex: Int,
 	replay: Boolean,
@@ -111,9 +114,10 @@ object BotConfig:
 			.split(",").map(_.trim).filter(_.nonEmpty).toList
 	)
 
-class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config: BotConfig = BotConfig())(using runtime: IORuntime):
+class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config: BotConfig = BotConfig(), username: String = "")(using runtime: IORuntime):
 	private var info: Option[SelfData] = None
 	private var tableID: Option[Int] = None
+	private var databaseID: Option[Int] = None
 	private var gameStarted = false
 	private var restoredSettings = false
 	private var tables: Map[Int, Table] = Map()
@@ -140,6 +144,9 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 			(io, addInfoNote(game, noteStr))
 		else
 			(IO.unit, game)
+
+	private[scala_bot] def logfileContext: IO[LogfileContext] =
+		gameRef.get.map(LogfileContext(username, tableID, databaseID, _))
 
 	def debug(cmd: ConsoleCmd) = gameRef.get.flatMap:
 		case None => IO.println("no active game")
@@ -255,11 +262,12 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 
 			// Received at the beginning of the game, as a list of all actions that have happened so far.
 			case "gameActionList" =>
+				val msg = GameActionListMessage.fromJSON(ujson.read(args))
+				// Start the table log before catch-up so it contains the complete game transcript.
 				// The settings have not been (attempted to be) restored so far.
 				// This will happen in 'noteListPlayer', which will then request the 'gameActionList' again.
+				ensureActiveLogDirectory(username, msg.tableID) *>
 				IO.whenA(restoredSettings):
-					val msg = GameActionListMessage.fromJSON(ujson.read(args))
-
 					gameRef.get.flatMap:
 						case None => IO.unit // throw new IllegalStateException("Game not initialized")
 						case Some(g) =>
@@ -297,6 +305,8 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 				handleInit(upickle.read[InitMessage](args))
 
 			case "left" =>
+				// Do not append messages from a later table to the table we just left.
+				stopFileLogging *>
 				IO:
 					tableID = None
 					gameStarted = false
@@ -371,16 +381,26 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 		*>
 		gameRef.set(None)
 
-	def handleInit(data: InitMessage) =
-		val InitMessage(tID, playerNames, ourPlayerIndex, _, _, options) = data
-		val variant = Variant.getVariant(options.variantName)
-		val state = State(playerNames, ourPlayerIndex, variant, options)
-		val game = newGameFromSettings(tID, state, convention)
+	def handleInit(data: InitMessage): IO[Unit] =
+		val InitMessage(tID, dbID, playerNames, ourPlayerIndex, _, _, options) = data
 
-		IO { tableID = Some(tID); restoredSettings = false } *>
-		gameRef.set(Some(game)) *>
-		// We will receive the 'noteListPlayer' next. This is when we can restore the settings.
-		sendCmd("getGameInfo2", ujson.write(ujson.Obj("tableID" -> tID)))
+		IO { databaseID = Some(dbID) } *>
+		// After a game ends, getGameInfo1 returns an init with its final database ID.
+		this.handleInitLogFile(dbID, sendChat).flatMap:
+			case false =>
+				val variant = Variant.getVariant(options.variantName)
+				val state = State(playerNames, ourPlayerIndex, variant, options)
+				val game = newGameFromSettings(tID, state, convention)
+
+				IO { tableID = Some(tID); restoredSettings = false } *>
+				gameRef.set(Some(game)) *>
+				IO.whenA(gameStarted):
+					startGameLog(username, tID, playerNames)
+				*>
+				// We will receive the 'noteListPlayer' next. This is when we can restore the settings.
+				sendCmd("getGameInfo2", ujson.write(ujson.Obj("tableID" -> tID)))
+
+			case true => IO.unit
 
 	def handleChat(data: ChatMessage): IO[Unit] =
 		val ChatMessage(msg, who, room, recipient) = data
@@ -391,6 +411,8 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 				assignSettings(data, false)
 			else if msg.startsWith("/leaveall") then
 				leaveRoom()
+			else if msg.startsWith("/logfile") then
+				this.handleLogFile(sendChat)
 			else
 				IO.unit
 
@@ -451,6 +473,9 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 		else if msg.startsWith("/version") then
 			sendPM(who, BOT_VERSION)
 
+		else if msg.startsWith("/logfile") then
+			this.handleLogFile(msg => sendPM(who, msg))
+
 		else if msg.startsWith("/help") then
 			sendHelp(data.who)
 
@@ -498,6 +523,7 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 
 	def handleAction(data: GameActionMessage): IO[Unit] =
 		val action = data.action
+		IO { data.databaseID.foreach(id => databaseID = Some(id)) } *>
 		gameRef.get.flatMap:
 			case None => IO.unit //throw new IllegalStateException("Game not initialized")
 			case Some(g) =>
@@ -509,6 +535,10 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 				.flatMap: newGame =>
 					val state = newGame.state
 					val queuedCmds = newGame.queuedCmds
+					// Request the final database ID so handleInitLogFile can publish the table log as a game log.
+					val gameEndedIO = IO.whenA(g.inProgress && !newGame.inProgress):
+						tableID.fold(IO.unit): id =>
+							sendCmd("getGameInfo1", ujson.write(ujson.Obj("tableID" -> id)))
 					val perform = !newGame.catchup &&
 						state.currentPlayerIndex == state.ourPlayerIndex &&
 						!state.ended &&
@@ -524,6 +554,7 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 
 					gameRef.set(Some(x)) *>
 					queuedCmds.traverse_(sendCmd(_, _)) *>
+					gameEndedIO *>
 					IO.whenA(perform):
 						val suggestedActionIO = newGame match
 							case r: Reactor  => r.takeAction
