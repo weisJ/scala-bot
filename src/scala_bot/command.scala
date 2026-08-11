@@ -32,7 +32,7 @@ case class GameActionMessage(
 object GameActionMessage:
 	def fromJSON(json: ujson.Value): Option[GameActionMessage] =
 		Action.fromJSON(json.obj("action")).map: action =>
-			GameActionMessage(json.obj("tableID").num.toInt, action, Some(json.obj("databaseID").num.toInt))
+			GameActionMessage(json.obj("tableID").num.toInt, action, json.obj.get("databaseID").map(_.num.toInt))
 
 case class Spectator(
 	name: String,
