@@ -100,3 +100,5 @@ The final score for each seed as well as how each game terminated are logged to 
 |---|---|---|
 | `HANABI_LEAVE_REPLAY_IF_ONLY_BOTS` | `1` | Auto-leave a shared replay when only bots are spectating. |
 | `HANABI_BOT_NAME_PREFIXES` | *(empty)* | Comma-separated prefixes identifying bot accounts (e.g. `will-bot,mybot`). Required for the flag above and `/stay` to take effect. |
+| `HANABI_TURN_DELAY_MS` | `2000` | Minimum delay before the bot takes a turn, in milliseconds. Fast mode bypasses this delay. |
+| `HANABI_DISABLE_FASTMODE_ON_NEW_TABLE` | `0` | Disable fast mode when leaving a table or when the current table is deleted. |

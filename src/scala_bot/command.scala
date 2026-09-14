@@ -100,7 +100,9 @@ case class NoteListPlayerMessage(tableID: Int, notes: Vector[String]) derives Re
 
 case class BotConfig(
 	leaveReplayIfOnlyBots: Boolean = true,
-	botNamePrefixes: List[String] = Nil
+	botNamePrefixes: List[String] = Nil,
+	turnDelayMs: Long = 2000,
+	disableFastModeOnNewTable: Boolean = false
 ):
 	def isBotName(name: String): Boolean =
 		botNamePrefixes.exists(name.startsWith)
@@ -109,7 +111,9 @@ object BotConfig:
 	def fromEnv(env: Map[String, String]): BotConfig = BotConfig(
 		leaveReplayIfOnlyBots = env.getOrElse("HANABI_LEAVE_REPLAY_IF_ONLY_BOTS", "1") == "1",
 		botNamePrefixes = env.getOrElse("HANABI_BOT_NAME_PREFIXES", "")
-			.split(",").map(_.trim).filter(_.nonEmpty).toList
+			.split(",").map(_.trim).filter(_.nonEmpty).toList,
+		turnDelayMs = env.getOrElse("HANABI_TURN_DELAY_MS", "2000").toLong,
+		disableFastModeOnNewTable = env.getOrElse("HANABI_DISABLE_FASTMODE_ON_NEW_TABLE", "0") == "1"
 	)
 
 class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config: BotConfig = BotConfig(), username: String = "")(using runtime: IORuntime):
@@ -332,7 +336,10 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 
 			case "tableGone" =>
 				val id = ujson.read(args)("tableID").num.toInt
-				IO { tables = tables - id }
+				IO:
+					if config.disableFastModeOnNewTable && tableID.contains(id) then
+						fastMode = false
+					tables = tables - id
 
 			case "tableList" =>
 				val list = upickle.read[List[Table]](args)
@@ -371,6 +378,9 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 	def leaveRoom(): IO[Unit] =
 		val cmd = if gameStarted then "tableUnattend" else "tableLeave"
 
+		IO.whenA(config.disableFastModeOnNewTable):
+			IO { fastMode = false }
+		*>
 		IO.whenA(tableID.isDefined):
 			sendCmd(cmd, ujson.write(ujson.Obj("tableID" -> tableID.get)))
 		*>
@@ -569,13 +579,13 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 							case r: RefSieve => r.takeAction
 							case h: HGroup   => h.takeAction
 
-						val computeAndSend = IO.sleep(2.seconds).whenA(!fastMode).start.flatMap: sleepFiber =>
+						val computeAndSend = IO.sleep(config.turnDelayMs.millis).whenA(!fastMode).start.flatMap: sleepFiber =>
 							suggestedActionIO.flatMap: action =>
 								Log.highlight(Console.BLUE, s"Suggested action: ${action.fmt(newGame, accordingTo = Some(newGame.me))}")
 								val arg = action.json(tableID.get)
 
 								if newGame.inProgress then
-									// Race against 2 second timer, then send.
+									// Wait for the configured minimum turn delay, then send.
 									sleepFiber.join *> sendCmd("action", ujson.write(arg))
 								else
 									sleepFiber.cancel
