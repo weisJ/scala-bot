@@ -42,7 +42,7 @@ object Logger:
 					logFile = None
 
 object Log:
-	inline val compileTimePriority = 0		// Change this value to 3 to enable full debug logs
+	inline val compileTimePriority = LogLevel.Info	// Change this value to 3 to enable full debug logs
 
 	inline def log(inline level: Int, inline msg: => String, inline colour: String = WHITE): Unit =
 		inline if level <= compileTimePriority then
