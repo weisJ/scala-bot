@@ -272,7 +272,7 @@ class Pink1sAssumption extends munit.FunSuite:
 class PinkPrompts extends munit.FunSuite:
 	override def beforeAll() = Logger.setLevel(LogLevel.Off)
 
-	test("prompts leftmost when rank matches"):
+	test("prompts leftmost when rank matches in a non-pink suit"):
 		val game = setup(HGroup.atLevel(1), Vector(
 			Vector("xx", "xx", "xx", "xx", "xx"),
 			Vector("r3", "i3", "i1", "r4", "g5"),
@@ -288,6 +288,23 @@ class PinkPrompts extends munit.FunSuite:
 
 		// Alice should prompt slot 3 as r2.
 		hasInfs(game, None, Alice, 3, Vector("r2"))
+
+	test("prompts leftmost when rank matches in a pink suit"):
+		val game = setup(HGroup.atLevel(1), Vector(
+			Vector("xx", "xx", "xx", "xx", "xx"),
+			Vector("r3", "i3", "i4", "r4", "g5"),
+			Vector("g4", "y3", "r3", "b3", "b3")
+		),
+			starting = Bob,
+			variant = TestVariant.Pink5,
+			playStacks = Some(Vector(0, 0, 0, 0, 1)),
+			clueTokens = 7
+		)
+		.pipe(takeTurn("Bob clues 2 to Alice (slots 3,4,5)"))
+		.pipe(takeTurn("Cathy clues pink to Bob"))
+
+		// Alice should prompt slot 3 as i2.
+		hasInfs(game, None, Alice, 3, Vector("i2"))
 
 	test("finesses when rank mismatches"):
 		val game = setup(HGroup.atLevel(1), Vector(
@@ -391,6 +408,48 @@ class PinkPrompts extends munit.FunSuite:
 	// 	.pipe(takeTurn("Donald plays b1", "i4"))
 
 	// 	hasInfs(game, None, Alice, 4, Vector("i2"))
+
+	test("prompts the card with the most positive info"):
+		val game = setup(HGroup.atLevel(2), Vector(
+			Vector("xx", "xx", "xx", "xx", "xx"),
+			Vector("i3", "r4", "y4", "g4", "b4"),
+			Vector("r3", "y3", "g3", "b3", "i3")
+		),
+			starting = Cathy,
+			variant = TestVariant.Pink5,
+			playStacks = Some(Vector(0, 0, 0, 0, 1)),
+			clueTokens = 7,
+			init =
+				preClue[HGroup](Alice, 5, Vector("2", "3")) andThen
+				preClue[HGroup](Alice, 4, Vector("2"))
+		)
+		.pipe(takeTurn("Cathy clues pink to Bob"))
+
+		// Alice should prompt slot 5 as i2.
+		hasStatus(game, Alice, 1, CardStatus.None)
+		hasInfs(game, None, Alice, 5, Vector("i2"))
+
+	test("prompts leftmost when it must be pink from good touch"):
+		val game = setup(HGroup.atLevel(2), Vector(
+			Vector("xx", "xx", "xx", "xx", "xx"),
+			Vector("i4", "r4", "y4", "g4", "b4"),
+			Vector("r3", "y3", "g3", "b3", "i3")
+		),
+			starting = Cathy,
+			variant = TestVariant.Pink5,
+			playStacks = Some(Vector(2, 2, 2, 2, 2)),
+			clueTokens = 7,
+			init =
+				preClue[HGroup](Alice, 5, Vector("2", "3")) andThen
+				preClue[HGroup](Alice, 4, Vector("2"))
+		)
+		.pipe(takeTurn("Cathy clues pink to Bob"))
+
+		// Alice should prompt slot 4 as i3.
+		hasStatus(game, Alice, 1, CardStatus.None)
+		hasInfs(game, None, Alice, 4, Vector("i3"))
+
+
 
 class PinkChoiceTempo extends munit.FunSuite:
 	override def beforeAll() = Logger.setLevel(LogLevel.Off)

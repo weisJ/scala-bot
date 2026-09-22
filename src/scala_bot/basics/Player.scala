@@ -359,7 +359,10 @@ case class Player(
 					clues.head.kind == ClueKind.Rank &&
 					clues.head.value != id.rank
 
-				!misranked && prev.knownAs(order, PINKISH)
+				val goodTouchPink = this.thoughts(order).possible.difference(state.trashSet).find: i =>
+					!state.variant.suits(i.suitIndex).suitType.pinkish
+
+				!misranked || goodTouchPink.isEmpty
 		)
 
 	/** Returns the order in the given player's hand that would be prompted for the given identity, if it exists.
@@ -374,6 +377,9 @@ case class Player(
 		val validPrompts = hand.filter(validPrompt(prev, _, id, connected, forcePink))
 
 		def posInfo(order: Int): Int =
+			if this.thoughts(order).possible.difference(state.trashSet).forall(_.suitIndex == id.suitIndex) then
+				return 4
+
 			case class PosInfo(
 				ranksClued: FastBitSet,
 				coloursClued: FastBitSet,

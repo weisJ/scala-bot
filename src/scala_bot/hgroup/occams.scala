@@ -114,7 +114,7 @@ def occamsRazor(ctx: ClueContext, fps: Seq[FocusPossibility], playerIndex: Int, 
 						// All of the other connections exist in this focus possibility before the self-connection
 						fp2.connections.zipWithIndex.forall: (c, i) =>
 							val c2 = fp.connections(i)
-							c2.order == c.order && c.ids.forall(c2.ids.contains)
+							c2.order == c.order// && c.ids.forall(c2.ids.contains)
 				case _ => None
 
 			dominated match

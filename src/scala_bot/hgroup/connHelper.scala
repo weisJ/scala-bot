@@ -161,7 +161,7 @@ def assignConns(game: HGroup, action: ClueAction, fps: Seq[FocusPossibility], fo
 						.withXMeta(conn.order): x =>
 							x.copy(turnFinessed = x.turnFinessed.orElse(Some(state.turnCount)))
 
-					case c: PlayableConn if isUnknownPlayable && (fp.isBluff || state.deck(focus).id().isDefined) =>
+					case c: PlayableConn if isUnknownPlayable && (fp.isBluff || state.deck(focus).id().isDefined || fps.count(!_.symmetric) == 1) =>
 						val target = fp.connections.lift(connI + 1).map(_.order).getOrElse(focus)
 						val existingLink = g.common.links.existsM:
 							case Link.Promised(orders, id, target) =>

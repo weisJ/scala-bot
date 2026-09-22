@@ -363,3 +363,20 @@ class General extends munit.FunSuite:
 		// hasInfs(game, None, Cathy, 5, Vector("r4", "y4"))
 		hasInfs(game, None, Alice, 1, Vector("p3"))
 		hasStatus(game, Alice, 1, CardStatus.Finessed)
+
+	test("understands when others give selfish clues"):
+		val game = setup(HGroup.atLevel(4), Vector(
+			Vector("xx", "xx", "xx", "xx", "xx"),
+			Vector("r4", "y4", "g4", "b3", "p4"),
+			Vector("r3", "y3", "b1", "y1", "r1")
+		))
+		.pipe(takeTurn("Alice clues 1 to Cathy"))
+		.pipe(takeTurn("Bob clues blue to Alice (slot 3)"))
+		.pipe(takeTurn("Cathy clues green to Alice (slot 1)"))
+
+		.pipe(takeTurn("Alice plays g1 (slot 1)"))	// Allow Alice's slot 1 to be blue
+		.pipe(takeTurn("Bob clues 5 to Alice (slot 5)"))
+		.pipe(takeTurn("Cathy clues blue to Bob"))
+
+		// Alice is not finessed for b1.
+		hasStatus(game, Alice, 1, CardStatus.None)

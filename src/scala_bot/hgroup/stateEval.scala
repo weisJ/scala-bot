@@ -217,31 +217,41 @@ def advance(orig: HGroup, game: HGroup, offset: Int): Double =
 
 				val maxPlay = math.min(knownPlays.maxOption.getOrElse(99.9), unknownPlays.minOption.getOrElse(99.9))
 
-				val canSdcm =
-					state.clueTokens < 8 &&
-					game.dcStatus == DcStatus.None &&
-					!game.inEndgame &&
-					earlyGameClue.isEmpty &&
-					!game.mustClue(playerIndex)
-
 				if strikes > 0 then
 					(knownPlays ++ unknownPlays).min
-				else if state.numPlayers == 2 && playerIndex != state.ourPlayerIndex then
-					maxPlay		// assume they won't clue us
 				else
-					val sdcmValue = if !canSdcm then -999 else
-						trash.headOption match
-							case Some(kt) =>
-								forceSdcm(orig, game, playerIndex, kt, offset, knownTrash = true)
-							case None =>
-								game.chop(playerIndex) match
-									case Some(chop) if !state.canClue =>
-										forceSdcm(orig, game, playerIndex, chop, offset, knownTrash = false)
-									case _ => -999
+					val sdcmValue =
+						val canSdcm =
+							state.clueTokens < 8 &&
+							game.dcStatus == DcStatus.None &&
+							!game.inEndgame &&
+							earlyGameClue.isEmpty &&
+							!game.mustClue(playerIndex)
 
-					Log.info(s"${indent(offset)}${state.names(playerIndex)} also trying clue")
+						if !canSdcm then None else
+							trash.headOption match
+								case Some(kt) =>
+									Some(forceSdcm(orig, game, playerIndex, kt, offset, knownTrash = true))
+								case None if !state.canClue =>
+									game.chop(playerIndex) match
+										case Some(chop) if !state.canClue =>
+											Some(forceSdcm(orig, game, playerIndex, chop, offset, knownTrash = false))
+										case _ => None
+								case None => None
 
-					maxPlay.max(_forceClue(orig, game, offset)._1).max(sdcmValue)
+					val accValue = sdcmValue.fold(maxPlay): sv =>
+						if bob == state.ourPlayerIndex && !game.chop(state.ourPlayerIndex).exists(game.meta(_).status == CardStatus.PermissionToDiscard) then
+							Log.info(s"${indent(offset)}may sdcm for us!")
+							0.9 * maxPlay + 0.1 * sv
+						else
+							maxPlay.max(sv)
+
+					if state.numPlayers == 2 && playerIndex != state.ourPlayerIndex then
+						accValue		// assume they won't clue us
+					else
+						Log.info(s"${indent(offset)}${state.names(playerIndex)} also trying clue")
+
+						accValue.max(_forceClue(orig, game, offset)._1)
 
 	else if player.thinksLocked(game, playerIndex) then
 		Log.info(s"${indent(offset)}${state.names(playerIndex)} locked!")

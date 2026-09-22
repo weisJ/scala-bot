@@ -179,9 +179,10 @@ def alternativeClue(ctx: ClueContext, severity: Int, maxStall: Int) =
 			case ClueInterp.Stall =>
 				val interp = hypo.stallInterp.get
 
-				STALL_INDICES(interp) < maxStall || {
-					interp matchesP:
+				STALL_INDICES(interp) < maxStall && {
+					interp match
 						case StallInterp.Stall5 => hypo.level >= 2 && (!hypo.inEarlyGame || !hypo.stalled5)
+						case _ => true
 				}
 
 	val thinksStall = FastBitSet.from(0 until state.numPlayers)

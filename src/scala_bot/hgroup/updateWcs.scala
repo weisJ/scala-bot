@@ -117,11 +117,14 @@ def refreshWCs(prev: HGroup, game: HGroup, action: Action, beforeClueInterp: Boo
 				if wc.ambiguousSelf then
 					Log.warn(s"not demonstrating ambiguous wc!")
 					struct
-				else struct.copy(
-					wcs = nextIndex.fold(struct.wcs)(i => struct.wcs :+ wc.copy(connections = conns.drop(i))),
-					toRemove = struct.toRemove :++ (if !skipped then struct.toRemove else nextIndex.fold(conns)(conns.take)),
-					demos = struct.demos :+ nextIndex.fold(wc)(i => wc.copy(connections = conns.drop(i)))
-				)
+				else
+					val isBluff = wc.currConn.matchesP { case f: FinesseConn if f.isBluff => true }
+
+					struct.copy(
+						wcs = if isBluff then struct.wcs else nextIndex.fold(struct.wcs)(i => struct.wcs :+ wc.copy(connections = conns.drop(i))),
+						toRemove = struct.toRemove :++ (if !skipped then struct.toRemove else nextIndex.fold(conns)(conns.take)),
+						demos = struct.demos :+ nextIndex.fold(wc)(i => wc.copy(connections = conns.drop(i)))
+					)
 			case UpdateResult.Remove =>
 				if hypo.isDefined then struct else
 					struct.copy(
@@ -233,6 +236,8 @@ def updateWc(prev: HGroup, game: HGroup, action: Action, wc: WaitingConnection, 
 			p.linked.forall(game.common.thoughts(_).possible.intersect(p.ids).isEmpty)
 		case f: FinesseConn if f.inverted =>
 			game.common.thoughts(f.order).possible.intersect(state.trashSet.union(f.ids)).isEmpty
+		case f: FinesseConn if f.isBluff =>
+			game.common.thoughts(f.order).possible.intersect(prev.state.playableSet).isEmpty
 		case conn =>
 			game.common.thoughts(conn.order).possible.intersect(conn.ids).isEmpty
 

@@ -147,7 +147,7 @@ case class HGroup(
 				unrevealedHidden.isEmpty &&
 				!unordered1 &&
 				!ambiguous1 &&
-				!potentialClandestine
+				(player.orderKp(this, o) || !potentialClandestine)
 
 	override def validArr(id: Identity, order: Int): Boolean =
 		val playables = this.me.thinksPlayables(this, state.ourPlayerIndex)
@@ -279,6 +279,18 @@ case class HGroup(
 				else
 					(overrideLayer || !(status == CardStatus.Finessed && !this.xmeta(o).finesseIds.get.contains(id)))
 			}
+
+		order.filter(!ignore.contains(_))
+
+	def findGD(playerIndex: Int, connected: FastBitSet = FastBitSet.empty, ignore: FastBitSet = FastBitSet.empty): Option[Int] =
+		val order = state.hands(playerIndex).find: o =>
+			val card = state.deck(o)
+			val status = this.meta(o).status
+
+			!card.clued &&
+			!connected.contains(o) &&
+			(status != CardStatus.Finessed || this.xmeta(o).fStatus.contains(FStatus.PossiblyOn(state.ourPlayerIndex))) &&
+			status != CardStatus.GentlemansDiscard
 
 		order.filter(!ignore.contains(_))
 

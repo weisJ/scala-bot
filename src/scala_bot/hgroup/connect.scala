@@ -601,6 +601,9 @@ def connect(ctx: ClueContext, id: Identity, looksDirect: Boolean, thinksStall: F
 							state.deck(conn.order).id().exists(!conn.ids.contains(_))
 						else
 							conn.linked.forall(state.deck(_).id().exists(!conn.ids.contains(_)))
+					case conn: FinesseConn if conn.isBluff =>
+						// A bluff doesn't have to match the actual id
+						false
 					case conn =>
 						state.deck(conn.order).id().exists(!conn.ids.contains(_))
 

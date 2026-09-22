@@ -56,7 +56,7 @@ def interpretTransfer(ctx: DiscardContext, holder: Int, dupe: Option[Int]): (Dis
 		else if state.isPlayable(id) || (prev.common.hypoPlays.contains(order) && !game.common.thoughts(order).reset) || prev.common.orderPlayable(prev, order) then
 			def findGD(hypoGame: HGroup, connected: FastBitSet): Option[List[Int]] =
 				val hypoState = hypoGame.state
-				(if inverted then hypoGame.chop(holder) else hypoGame.findFinesse(holder, connected)) match
+				(if inverted then hypoGame.chop(holder) else hypoGame.findGD(holder, connected)) match
 					case None => None
 					case Some(f) =>
 						val finesseId =

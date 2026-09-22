@@ -576,7 +576,7 @@ class BotClient(queue: Queue[IO, String], gameRef: Ref[IO, Option[Game]], config
 						}
 
 	def sendHelp(who: String) =
-		sendPM(who, "Commands: /analyze, /bugreport, /doc, /fastmode, /help, /join, /leave, /settings, /start, /terminate, /version. See https://github.com/will-hanabi-bot/scala-bot#supported-commands for more info.")
+		sendPM(who, "Commands: /analyze, /bugreport, /doc, /fastmode, /help, /join, /leave, /settings, /start, /stay, /terminate, /version. See https://github.com/will-hanabi-bot/scala-bot#supported-commands for more info.")
 
 	def checkSupportedSettings(table: Table): IO[Unit] =
 		val unsupportedOptions = List(

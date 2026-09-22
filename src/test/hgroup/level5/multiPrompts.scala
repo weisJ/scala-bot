@@ -83,6 +83,26 @@ class MultiPrompts extends munit.FunSuite:
 		hasInfs(game, None, Alice, 1, Vector("m3"))
 		assert(game.common.thoughts(game.state.hands(Alice.ordinal)(1)).inferred.length > 1)
 
+	test("prompts leftmost when good touch rainbow"):
+		val game = setup(HGroup.atLevel(5), Vector(
+			Vector("xx", "xx", "xx", "xx", "xx"),
+			Vector("g3", "g3", "b3", "y3", "m4"),
+			Vector("y4", "y4", "b3", "y3", "g4")
+		),
+			starting = Cathy,
+			variant = TestVariant.Rainbow5,
+			playStacks = Some(Vector(5, 0, 0, 0, 2)),
+			clueTokens = 7,
+			init =
+				preClue[HGroup](Alice, 1, Seq("red")) andThen
+				preClue[HGroup](Alice, 2, Seq("red", "green", "blue"))
+		)
+		.pipe(takeTurn("Cathy clues red to Bob"))
+
+		// Alice should prompt slot 1.
+		hasInfs(game, None, Alice, 1, Vector("m3"))
+		assert(game.common.thoughts(game.state.hands(Alice.ordinal)(1)).inferred.length > 1)
+
 	test("prompts leftmost when known pink"):
 		val game = setup(HGroup.atLevel(5), Vector(
 			Vector("xx", "xx", "xx", "xx", "xx"),

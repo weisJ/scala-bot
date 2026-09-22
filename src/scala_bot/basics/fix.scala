@@ -104,7 +104,7 @@ def distributionClue(prev: Game, game: Game, action: ClueAction, focus: Int): Op
 		lazy val duplicated = state.hands.zipWithIndex.exists: (hand, i) =>
 			i != target && hand.exists(o => game.isTouched(o) && game.orderMatches(o, id, infer = true))
 
-		if state.isBasicTrash(id) then
+		if state.isBasicTrash(id) || state.isCritical(id) then
 			Right(acc)
 		else if duplicated then
 			Right(acc.union(id))

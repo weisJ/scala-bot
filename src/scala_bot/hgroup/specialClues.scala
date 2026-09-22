@@ -163,12 +163,12 @@ def interpSpecialClue(ctx: ClueContext): SpecialClueResult =
 				.when(_.state.variant.pinkish && clue.kind == ClueKind.Rank):
 					_.withThought(focus)(t => t.copy(inferred = t.inferred.filter(_.rank == clue.value)))
 				.copy(stallInterp = Some(interp))
-				.withMove(ClueInterp.Stall)
+				.withMove(if interp == StallInterp.SaveLHS then ClueInterp.Save else ClueInterp.Stall)
 
 	distributionClue(prev, game, action, focus) match
 		case None => ()
 		case Some(ids) =>
-			Log.info(s"distribution clue!")
+			Log.info(s"distribution clue for [${ids.fmt(state)}]!")
 
 			return SpecialClue:
 				game.withThought(focus): t =>

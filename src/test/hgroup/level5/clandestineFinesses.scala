@@ -158,3 +158,18 @@ class ClandestineFinesses extends munit.FunSuite:
 		hasInfs(redF, None, Alice, 2, Vector("r3"))
 		hasInfs(redF, None, Alice, 1, Vector("r2"))
 		hasStatus(redF, Alice, 1, CardStatus.Finessed)
+
+	test("doesn't wait for a potential finesse when known playable"):
+		val game = setup(HGroup.atLevel(5), Vector(
+			Vector("xx", "xx", "xx", "xx", "xx"),
+			Vector("y2", "r3", "y3", "g3", "b3"),
+			Vector("r4", "y4", "b4", "g4", "p4")
+		),
+			starting = Bob,
+			playStacks = Some(Vector(1, 1, 0, 2, 0))
+		)
+		.pipe(takeTurn("Bob clues 2 to Alice (slot 4)"))
+		.pipe(takeTurn("Cathy clues 3 to Alice (slot 2)"))
+
+		// Our 2 is definitely playable, even if Bob is finessing y2.
+		assertEquals(game.me.thinksPlayables(game, game.state.ourPlayerIndex), Vector(game.state.hands(Alice.ordinal)(3)))
